@@ -43,6 +43,14 @@ export type Lead = LeadInput & {
   chat: ChatMessage[];
 };
 
+// Local date as YYYY-MM-DD (en-CA happens to format dates that way).
+export const todayISO = () => new Date().toLocaleDateString("en-CA");
+
+// Computed on read, never stored, so it can't go stale (see DECISIONS.md #3).
+export function isFollowUpDue(lead: Lead): boolean {
+  return lead.follow_up_status === "pending" && !!lead.follow_up_date && lead.follow_up_date <= todayISO();
+}
+
 export type LeadEvent = {
   id: string;
   lead_id: string;

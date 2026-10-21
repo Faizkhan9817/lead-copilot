@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import IntakeForm from "@/components/IntakeForm";
 import LeadDetail from "@/components/LeadDetail";
-import { api, ErrorBox, ScoreBadge, TagBadge } from "@/components/ui";
+import LeadList, { groupLeads } from "@/components/LeadList";
+import { api, ErrorBox } from "@/components/ui";
 import type { Lead } from "@/lib/schemas";
 
 export default function Home() {
@@ -10,11 +11,19 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Show the list and, on desktop, pre-select the top-priority lead so the detail pane is never empty.
+  // (On mobile we stay on the list, since selecting a lead switches to the detail view.)
+  function showLeads(list: Lead[]) {
+    setLeads(list);
+    if (window.matchMedia("(min-width: 768px)").matches) setSelectedId(groupLeads(list)[0]?.leads[0]?.id ?? null);
+  }
 
   useEffect(() => {
     api<{ leads: Lead[] }>("/api/leads")
-      .then(({ leads }) => setLeads(leads))
+      .then(({ leads }) => showLeads(leads))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
@@ -24,45 +33,73 @@ export default function Home() {
     setLeads((prev) => [lead, ...prev.filter((l) => l.id !== lead.id)]);
   }
 
+  async function loadSamples() {
+    if (leads.length > 0 && !confirm("This replaces ALL current leads with the sample leads. Continue?")) return;
+    setSeeding(true);
+    setError(null);
+    try {
+      const { leads, error } = await api<{ leads: Lead[]; error?: string }>("/api/seed", { method: "POST" });
+      showLeads(leads);
+      if (error) setError(error);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSeeding(false);
+    }
+  }
+
   const selected = leads.find((l) => l.id === selectedId) ?? null;
-  const sorted = [...leads].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 text-gray-900">
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-        <h1 className="font-semibold">Lead Copilot</h1>
-        <button onClick={() => setShowForm(true)} className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700">
+    <div className="flex h-screen flex-col bg-gray-50 text-gray-900">
+      <header className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-3">
+        <h1 className="mr-auto whitespace-nowrap font-semibold">
+          Lead Copilot <span className="hidden text-sm font-normal text-gray-500 sm:inline">· real-estate lead triage</span>
+        </h1>
+        <button
+          onClick={loadSamples}
+          disabled={seeding}
+          className="whitespace-nowrap rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
+        >
+          {seeding ? "Analyzing…" : <><span className="hidden sm:inline">Load </span>samples</>}
+        </button>
+        <button onClick={() => setShowForm(true)} className="whitespace-nowrap rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700">
           + New lead
         </button>
       </header>
 
-      <div className="px-4 pt-3">
-        <ErrorBox message={error} />
-      </div>
+      {error && (
+        <div className="px-4 pt-3">
+          <ErrorBox message={error} />
+        </div>
+      )}
 
-      <main className="flex flex-1 flex-col md:flex-row">
-        <aside className="border-b border-gray-200 bg-white md:w-80 md:border-b-0 md:border-r">
+      {/* Desktop: two panes side by side. Mobile: list OR detail, with a back button. */}
+      <main className="flex min-h-0 flex-1">
+        <aside
+          className={`w-full overflow-y-auto border-r border-gray-200 bg-white md:block md:w-96 md:shrink-0 ${selected ? "hidden" : "block"}`}
+        >
           {loading && <p className="p-4 text-sm text-gray-500">Loading leads…</p>}
-          {!loading && leads.length === 0 && <p className="p-4 text-sm text-gray-500">No leads yet.</p>}
-          <ul>
-            {sorted.map((lead) => (
-              <li key={lead.id}>
-                <button
-                  onClick={() => setSelectedId(lead.id)}
-                  className={`flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left hover:bg-gray-50 ${lead.id === selectedId ? "bg-gray-100" : ""}`}
-                >
-                  <ScoreBadge score={lead.score} tag={lead.tag} />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{lead.name}</span>
-                  <TagBadge tag={lead.tag} />
-                </button>
-              </li>
-            ))}
-          </ul>
+          {seeding && <p className="p-4 text-sm text-gray-500">Running AI analysis on 6 sample leads (10–30 s)…</p>}
+          {!loading && !seeding && leads.length === 0 && (
+            <div className="p-6 text-center text-sm text-gray-500">
+              <p>No leads yet.</p>
+              <button onClick={loadSamples} className="mt-2 font-medium text-gray-900 underline">
+                Load 6 sample leads
+              </button>
+            </div>
+          )}
+          {!seeding && <LeadList leads={leads} selectedId={selectedId} onSelect={setSelectedId} />}
         </aside>
 
-        <section className="flex-1 p-4">
+        <section className={`min-w-0 flex-1 overflow-y-auto p-4 md:block ${selected ? "block" : "hidden"}`}>
           {selected ? (
-            <LeadDetail key={selected.id} lead={selected} onUpdated={upsert} />
+            <>
+              <button onClick={() => setSelectedId(null)} className="mb-3 text-sm text-gray-600 md:hidden">
+                ← All leads
+              </button>
+              <LeadDetail key={selected.id} lead={selected} onUpdated={upsert} />
+            </>
           ) : (
             <p className="text-sm text-gray-500">Select a lead, or add a new one.</p>
           )}
