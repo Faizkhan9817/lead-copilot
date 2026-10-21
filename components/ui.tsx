@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Lead } from "@/lib/schemas";
 
 // Small shared display pieces, so badges look the same everywhere.
@@ -67,4 +68,53 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
   return data as T;
+}
+
+// Runs an async action with a loading flag and an error message, the pattern every AI button needs.
+export function useAction() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return { busy, error, run };
+}
+
+export function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="mt-2 text-xs font-medium text-gray-600 hover:text-gray-900"
+    >
+      {copied ? "Copied ✓" : "Copy to clipboard"}
+    </button>
+  );
+}
+
+export function Button({ children, primary, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean }) {
+  const style = primary
+    ? "bg-gray-900 font-medium text-white hover:bg-gray-700"
+    : "border border-gray-300 bg-white hover:bg-gray-50";
+  return (
+    <button {...props} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm disabled:opacity-50 ${style} ${props.className ?? ""}`}>
+      {children}
+    </button>
+  );
+}
+
+export function formatDate(iso: string): string {
+  return new Date(iso.length === 10 ? iso + "T00:00:00" : iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
