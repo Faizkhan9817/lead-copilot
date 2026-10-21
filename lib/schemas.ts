@@ -43,7 +43,7 @@ export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 // The fields a salesperson fills in on the intake form.
 export const LeadInputSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(100),
+  name: z.string({ error: "Name is required" }).trim().min(1, "Name is required").max(100),
   location: z.string().trim().max(200).default(""),
   requirement: z.string().trim().max(500).default(""),
   budget: z.string().trim().max(100).default(""),
