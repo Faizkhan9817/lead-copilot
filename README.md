@@ -2,7 +2,7 @@
 
 **AI lead triage and call follow-up for real-estate salespeople.** Paste in an inbound lead and the app tells you how good it is and why, what the customer wants, and what to do next. It also prepares you for the call, and after the call it turns your notes into a scheduled follow-up so no promise gets dropped.
 
-- **Live demo:** _add your Vercel URL here_
+- **Live demo:** https://lead-copilot-six.vercel.app (no login needed)
 - **Stack:** Next.js 16 (App Router) · TypeScript · Tailwind · Supabase Postgres · Gemini → Groq fallback · Vercel
 
 ---
