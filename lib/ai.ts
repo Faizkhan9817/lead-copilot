@@ -2,16 +2,19 @@ import "server-only";
 import type { z } from "zod";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
-type Provider = "gemini" | "groq";
+export type Provider = "gemini" | "groq";
+type Options = { json?: boolean; stream?: boolean };
 
 // An error whose message is safe and useful to show the salesperson.
 export class AIError extends Error {}
 
-const TIMEOUT_MS = 25_000;
+const TIMEOUT_MS = 25_000; // whole request for normal calls
+const STREAM_TIMEOUT_MS = 60_000; // streams stay open while text arrives
 
 // ---------- Providers (plain fetch, no SDKs) ----------
+// Each one sends the request and throws if it fails, so the caller can fall back.
 
-async function callGemini(messages: Msg[], json: boolean): Promise<string> {
+async function geminiRequest(messages: Msg[], { json, stream }: Options): Promise<Response> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -22,27 +25,22 @@ async function callGemini(messages: Msg[], json: boolean): Promise<string> {
     .filter((m) => m.role !== "system")
     .map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents,
-        generationConfig: { temperature: 0.4, ...(json && { responseMimeType: "application/json" }) },
-      }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    },
-  );
+  const method = stream ? "streamGenerateContent?alt=sse" : "generateContent";
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents,
+      generationConfig: { temperature: 0.4, ...(json && { responseMimeType: "application/json" }) },
+    }),
+    signal: AbortSignal.timeout(stream ? STREAM_TIMEOUT_MS : TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("");
-  if (!text) throw new Error(`Gemini returned no text (finishReason: ${data.candidates?.[0]?.finishReason})`);
-  return text;
+  return res;
 }
 
-async function callGroq(messages: Msg[], json: boolean): Promise<string> {
+async function groqRequest(messages: Msg[], { json, stream }: Options): Promise<Response> {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new Error("GROQ_API_KEY not set");
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
@@ -55,32 +53,74 @@ async function callGroq(messages: Msg[], json: boolean): Promise<string> {
       model,
       messages,
       temperature: 0.4,
+      stream: !!stream,
       ...(json && { response_format: { type: "json_object" } }),
     }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(stream ? STREAM_TIMEOUT_MS : TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error("Groq returned no text");
-  return text;
+  return res;
 }
 
-// ---------- Public API ----------
+// Pull the text out of one response (or one streamed chunk) in each provider's format.
+type Chunk = {
+  candidates?: { content?: { parts?: { text?: string }[] } }[]; // Gemini
+  choices?: { message?: { content?: string }; delta?: { content?: string } }[]; // Groq
+};
+function extractText(provider: Provider, data: Chunk): string {
+  if (provider === "gemini") return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+  const choice = data.choices?.[0];
+  return choice?.message?.content ?? choice?.delta?.content ?? "";
+}
 
 // Try Gemini first; on any failure (bad key, 429 rate limit, 5xx, timeout) fall back to Groq.
-export async function callModel(messages: Msg[], json = false): Promise<{ text: string; provider: Provider }> {
+async function requestWithFallback(messages: Msg[], options: Options): Promise<{ res: Response; provider: Provider }> {
   try {
-    return { text: await callGemini(messages, json), provider: "gemini" };
+    return { res: await geminiRequest(messages, options), provider: "gemini" };
   } catch (geminiErr) {
     console.warn("[ai] Gemini failed, falling back to Groq:", (geminiErr as Error).message);
     try {
-      return { text: await callGroq(messages, json), provider: "groq" };
+      return { res: await groqRequest(messages, options), provider: "groq" };
     } catch (groqErr) {
       console.error("[ai] Groq also failed:", (groqErr as Error).message);
       throw new AIError(
         "The AI service is unavailable right now (both Gemini and Groq failed). Check the API keys or try again in a minute.",
       );
+    }
+  }
+}
+
+// ---------- Public API ----------
+
+export async function callModel(messages: Msg[], json = false): Promise<{ text: string; provider: Provider }> {
+  const { res, provider } = await requestWithFallback(messages, { json });
+  const text = extractText(provider, await res.json());
+  if (!text) throw new AIError("The AI returned an empty response. Please try again.");
+  return { text, provider };
+}
+
+// Streaming: the fallback can only happen before the first chunk arrives (once text has been sent to
+// the browser we can't switch providers), which is when rate-limit and auth errors happen anyway.
+export async function streamModel(messages: Msg[]): Promise<{ textStream: AsyncGenerator<string>; provider: Provider }> {
+  const { res, provider } = await requestWithFallback(messages, { stream: true });
+  return { textStream: readSSE(res, provider), provider };
+}
+
+// Both providers stream Server-Sent Events: lines of `data: {json}`. Yield just the text pieces.
+async function* readSSE(res: Response, provider: Provider): AsyncGenerator<string> {
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += value;
+    const lines = buffer.split("\n");
+    buffer = lines.pop()!; // keep a partial last line for the next read
+    for (const line of lines) {
+      const payload = line.trim().replace(/^data: ?/, "");
+      if (!line.startsWith("data:") || payload === "[DONE]") continue;
+      const text = extractText(provider, JSON.parse(payload));
+      if (text) yield text;
     }
   }
 }

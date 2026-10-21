@@ -2,7 +2,7 @@
 // Run: npm run test:ai
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { AIError, callModel, generateJson } from "../lib/ai.ts";
+import { AIError, callModel, generateJson, streamModel } from "../lib/ai.ts";
 
 const Schema = z.object({ score: z.number() });
 const msgs = [{ role: "user" as const, content: "hi" }];
@@ -75,4 +75,31 @@ await test("Wrong shape twice -> friendly AIError, no third try", async () => {
   const calls = fakeFetch(() => gemini('{"score": "high"}'), () => gemini('{"nope": 1}'));
   await assert.rejects(generateJson(Schema, msgs), (e) => e instanceof AIError && /format/.test(e.message));
   assert.equal(calls.length, 2);
+});
+
+// Streaming: build an SSE response whose body arrives in the given raw pieces.
+const sse = (...pieces: string[]) =>
+  new Response(new ReadableStream({ start(c) { pieces.forEach((p) => c.enqueue(new TextEncoder().encode(p))); c.close(); } }));
+const collect = async (gen: AsyncGenerator<string>) => { let out = ""; for await (const t of gen) out += t; return out; };
+const gChunk = (text: string) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] })}\n\n`;
+const qChunk = (text: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`;
+
+await test("Stream from Gemini -> text pieces joined", async () => {
+  fakeFetch(() => sse(gChunk("Hello "), gChunk("Priya")));
+  const { textStream, provider } = await streamModel(msgs);
+  assert.equal(provider, "gemini");
+  assert.equal(await collect(textStream), "Hello Priya");
+});
+
+await test("Stream: Gemini 429 -> Groq stream (with [DONE])", async () => {
+  fakeFetch(() => new Response("quota", { status: 429 }), () => sse(qChunk("Hi "), qChunk("there"), "data: [DONE]\n\n"));
+  const { textStream, provider } = await streamModel(msgs);
+  assert.equal(provider, "groq");
+  assert.equal(await collect(textStream), "Hi there");
+});
+
+await test("Stream: an event split across two network reads is reassembled", async () => {
+  const event = gChunk("split ok");
+  fakeFetch(() => sse(event.slice(0, 20), event.slice(20)));
+  assert.equal(await collect((await streamModel(msgs)).textStream), "split ok");
 });

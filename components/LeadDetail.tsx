@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { MAX_MESSAGE_CHARS } from "@/lib/prompts";
 import type { Lead } from "@/lib/schemas";
+import ChatPanel from "./ChatPanel";
 import { api, Bullets, Card, ErrorBox, ScoreBadge, TagBadge, UrgencyFlag } from "./ui";
 
 type Props = { lead: Lead; onUpdated: (lead: Lead) => void };
@@ -91,6 +92,8 @@ export default function LeadDetail({ lead, onUpdated }: Props) {
           </Card>
         </div>
       )}
+
+      <ChatPanel lead={lead} onUpdated={onUpdated} />
 
       <details className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
         <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-gray-500">

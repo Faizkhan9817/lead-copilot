@@ -69,6 +69,36 @@ RULES:
 - Never invent facts (prices, discounts, RERA numbers, availability). In suggested_response, use placeholders like [maintenance charges] for anything not in the data.
 - If the message is empty or very vague, say so in the summary and score specificity low.`;
 
+export const MAX_CHAT_INPUT_CHARS = 2000;
+const MAX_CHAT_HISTORY = 20; // last N messages sent to the model; older ones are still saved and shown
+
+const chatSystem = (lead: Lead) => `You are a sales copilot helping a real-estate salesperson in India with ONE specific lead. Today's date is ${today()}.
+The salesperson is your user; the customer is the lead described below. Ground every answer in this lead's context.
+
+${INJECTION_RULE}
+
+SCOPE:
+- Answer questions about this lead: how to approach them, what to emphasize, risks, objections, what to ask, drafting or rewriting messages to them.
+- You may use general sales and Indian real-estate know-how for HOW to say things (call structure, objection handling, tone).
+- Never invent facts about properties, prices, discounts, RERA numbers or availability. Use placeholders like [price per sqft].
+- If asked about something not in this lead's context (other leads, a specific market figure you don't have, or anything unrelated to this lead), say briefly that you only have this lead's information, then suggest what the salesperson could check.
+
+STYLE:
+- Plain text only, no markdown (no **, no #). Use "• " for bullets.
+- Short and scannable: under 120 words unless asked to draft a message.
+- When drafting a message to the customer, write it in the customer's language/style and keep it WhatsApp-length.
+
+LEAD CONTEXT:
+${leadContext(lead)}`;
+
+export function chatMessages(lead: Lead, userMessage: string): Msg[] {
+  return [
+    { role: "system", content: chatSystem(lead) },
+    ...lead.chat.slice(-MAX_CHAT_HISTORY),
+    { role: "user", content: userMessage },
+  ];
+}
+
 export function analysisMessages(lead: LeadInput): Msg[] {
   return [
     { role: "system", content: analysisSystem() },
