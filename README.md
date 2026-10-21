@@ -183,6 +183,15 @@ docs/                        DECISIONS · DEPLOY · DEMO_SCRIPT · CHEATSHEET
 ```
 
 ## AI usage disclosure
-> _Edit this to match what you actually did._
->
-> I used Claude Code (Anthropic) as a pair programmer for scaffolding and implementation. I designed the product: the problem framing, the Call Prep and Post-Call Follow-up feature, the scoring rubric, and the UX. I directed the build step by step, and I reviewed, ran and tested the code, including live testing with the real models, which led to switching models and tightening the grounding rules. I can explain every file and decision; see `docs/DECISIONS.md`.
+I built this with **Claude Code** (Anthropic) as my AI pair programmer, and I want to be clear about who did what.
+
+**What I did:**
+- **Defined the product in a written brief:** the problem, all the requirements, my own feature (*Call Prep and Post-Call Follow-up*), the stack, the AI design rules (structured JSON + Zod, Gemini → Groq fallback, prompt-injection defense, a scoring rubric based on budget, timeline, specificity and buying signals), and a step-by-step way of working with a commit and a test after each step.
+- **Made the key product decisions** when asked: Indian market and INR, no login with a shared demo database, keeping `gemini-3.8-flash` despite its free-tier limit.
+- **Approved each build step before the next one started.**
+- **Set up the accounts and keys** (Gemini, Groq, Supabase), created the database, and deployed the app on Vercel.
+- **Caught a hydration error** in the browser and had it fixed.
+
+**What Claude Code did:** wrote the code, prompts, tests and documentation, ran the offline and live tests, and created the GitHub repo at my request. Live testing surfaced three issues: retired default models, the model asserting facts it couldn't know, and Gemini's daily free-tier quota. The fixes are recorded in `docs/DECISIONS.md`.
+
+I'm using `docs/DECISIONS.md` and `docs/CHEATSHEET.md` to make sure I can explain every file and decision in the interview.
