@@ -59,7 +59,9 @@ const RUBRIC = `SCORING RUBRIC (score is 0-100, add up these four parts):
 Tag: hot = 70+, warm = 40-69, cold = below 40.
 Urgency is separate from score: how soon the salesperson must act (e.g. a site visit requested for this weekend, or a competitor offer on the table = high).`;
 
-const NO_INVENTED_FACTS = `Never invent facts (prices, discounts, RERA numbers, availability, amenities). Use placeholders like [maintenance charges] for anything not in the data.`;
+// Live testing showed models "helpfully" asserting things like "parking is included" or "I've attached
+// the floor plan", so this spells out the categories and the safe alternative (a placeholder or a question).
+const NO_INVENTED_FACTS = `GROUNDING: Never state or promise property facts that are not in the lead data: prices, charges and what they cover, discounts, RERA numbers, possession dates, availability, parking, amenities, water/power, or attachments you have not been told exist. Instead use a [placeholder] (e.g. [maintenance charges], [parking details], [floor plan link]) or turn it into something to confirm or ask. Example: write "I'll confirm the parking allocation" instead of "parking is included".`;
 
 // Functions, not constants, so "today" is correct even on a long-lived server instance.
 const analysisSystem = () => `You are a senior real-estate sales analyst in India. You help a salesperson triage inbound leads fast.

@@ -17,7 +17,7 @@ const STREAM_TIMEOUT_MS = 60_000; // streams stay open while text arrives
 async function geminiRequest(messages: Msg[], { json, stream }: Options): Promise<Response> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
   // Gemini takes the system prompt separately and calls the assistant role "model".
   const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
@@ -43,7 +43,7 @@ async function geminiRequest(messages: Msg[], { json, stream }: Options): Promis
 async function groqRequest(messages: Msg[], { json, stream }: Options): Promise<Response> {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new Error("GROQ_API_KEY not set");
-  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
   // Groq uses the OpenAI chat format, so messages go through unchanged.
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
