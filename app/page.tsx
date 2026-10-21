@@ -4,7 +4,7 @@ import IntakeForm from "@/components/IntakeForm";
 import LeadDetail from "@/components/LeadDetail";
 import LeadList, { groupLeads } from "@/components/LeadList";
 import { api, ErrorBox } from "@/components/ui";
-import type { Lead } from "@/lib/schemas";
+import { isFollowUpDue, type Lead } from "@/lib/schemas";
 
 export default function Home() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -89,6 +89,12 @@ export default function Home() {
               </button>
             </div>
           )}
+          {!seeding && leads.length > 0 && (
+            <p className="border-b border-gray-200 px-4 py-2 text-xs text-gray-500">
+              {leads.length} leads · <span className="text-purple-700">{plural(leads.filter(isFollowUpDue).length, "follow-up")} due</span> ·{" "}
+              <span className="text-red-700">{leads.filter((l) => l.tag === "hot").length} hot</span>
+            </p>
+          )}
           {!seeding && <LeadList leads={leads} selectedId={selectedId} onSelect={setSelectedId} />}
         </aside>
 
@@ -120,3 +126,5 @@ export default function Home() {
     </div>
   );
 }
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
