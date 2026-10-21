@@ -153,7 +153,7 @@ Full reasoning, alternatives and likely interview questions are in **[docs/DECIS
 - **No login; one shared demo database.** Anyone with the URL can add leads or press "Load samples", which resets everything.
 - **Prompt-level grounding reduces made-up facts but can't eliminate them.** A salesperson should review every message before sending it.
 - **Chat history is one jsonb array per lead.** Two people chatting about the same lead at the same moment could overwrite each other's messages.
-- **Gemini's free tier rate-limits bursts.** The Groq fallback covers this, but answers can differ slightly between providers.
+- **Gemini's free tier allows only 20 requests per day for `gemini-3.8-flash`** (it resets at midnight Pacific, and the quota is per Google project, so local and live share it). After that, every request falls back to Groq: about 0.3 s for the rejected Gemini call plus about 1 s for Groq. The timeline shows "via groq". Answers can differ slightly between providers.
 - **Scores can vary a few points between runs** (temperature 0.4), and the rubric's market-price knowledge is the model's general knowledge, not live listing data.
 
 ## What I'd do next with more time
