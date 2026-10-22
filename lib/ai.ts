@@ -57,6 +57,9 @@ async function groqRequest(messages: Msg[], { json, stream }: Options): Promise<
         temperature: 0.4,
         stream: !!stream,
         ...(json && { response_format: { type: "json_object" } }),
+        // gpt-oss is a reasoning model; "low" cut an analysis from ~2,300 to ~1,400 tokens and ~3.8 s to
+        // ~1.4 s in testing, which matters under the free 8,000 tokens/min limit.
+        ...(model.startsWith("openai/gpt-oss") && { reasoning_effort: "low" }),
       }),
       signal: AbortSignal.timeout(stream ? STREAM_TIMEOUT_MS : TIMEOUT_MS),
     });
