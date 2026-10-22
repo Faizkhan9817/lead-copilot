@@ -183,15 +183,19 @@ docs/                        DECISIONS · DEPLOY · DEMO_SCRIPT · CHEATSHEET
 ```
 
 ## AI usage disclosure
-I built this with **Claude Code** (Anthropic) as my AI pair programmer, and I want to be clear about who did what.
+I used two AI tools, and I want to be clear about who did what.
+
+**Kimi** (Moonshot AI) helped me write the product brief. I described the assignment and my ideas, and used Kimi to turn them into a detailed specification: the requirements, my own feature (*Call Prep and Post-Call Follow-up*), the stack, the AI design rules (structured JSON + Zod, Gemini → Groq fallback, prompt-injection defense, a scoring rubric based on budget, timeline, specificity and buying signals), and a step-by-step way of working with a commit and a test after each step.
+
+**Claude Code** (Anthropic) was my AI pair programmer for the build.
 
 **What I did:**
-- **Defined the product in a written brief:** the problem, all the requirements, my own feature (*Call Prep and Post-Call Follow-up*), the stack, the AI design rules (structured JSON + Zod, Gemini → Groq fallback, prompt-injection defense, a scoring rubric based on budget, timeline, specificity and buying signals), and a step-by-step way of working with a commit and a test after each step.
+- **Defined the product and the brief** above, with Kimi's help, and gave it to Claude Code.
 - **Made the key product decisions** when asked: Indian market and INR, no login with a shared demo database, keeping `gemini-3.8-flash` despite its free-tier limit.
 - **Approved each build step before the next one started.**
 - **Set up the accounts and keys** (Gemini, Groq, Supabase), created the database, and deployed the app on Vercel.
 - **Caught a hydration error** in the browser and had it fixed.
 
-**What Claude Code did:** wrote the code, prompts, tests and documentation, ran the offline and live tests, and created the GitHub repo at my request. Live testing surfaced three issues: retired default models, the model asserting facts it couldn't know, and Gemini's daily free-tier quota. The fixes are recorded in `docs/DECISIONS.md`.
+**What Claude Code did:** wrote the code, prompts, tests and documentation, ran the offline and live tests, and created the GitHub repo at my request. Live testing surfaced four issues: retired default models, the model asserting facts it couldn't know, Gemini's daily free-tier quota, and Groq's per-minute token limit. The fixes are recorded in `docs/DECISIONS.md`.
 
 I'm using `docs/DECISIONS.md` and `docs/CHEATSHEET.md` to make sure I can explain every file and decision in the interview.
