@@ -55,6 +55,16 @@ await test("Gemini key missing -> goes straight to Groq", async () => {
   process.env.GEMINI_API_KEY = "fake";
 });
 
+await test("Groq 429 with retry-after -> waits, then retries once", async () => {
+  const calls = fakeFetch(
+    () => new Response("quota", { status: 429 }),
+    () => new Response("rate limited", { status: 429, headers: { "retry-after": "1" } }),
+    () => groq("after waiting"),
+  );
+  assert.deepEqual(await callModel(msgs), { text: "after waiting", provider: "groq" });
+  assert.deepEqual(calls, ["gemini", "groq", "groq"]);
+});
+
 await test("Both providers fail -> friendly AIError", async () => {
   fakeFetch(() => new Response("bad key", { status: 401 }), () => new Response("down", { status: 503 }));
   await assert.rejects(callModel(msgs), (e) => e instanceof AIError && /unavailable/.test(e.message));

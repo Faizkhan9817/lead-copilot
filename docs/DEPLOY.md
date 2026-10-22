@@ -89,4 +89,4 @@ git ls-files | grep -i env
 | "Database error: relation leads does not exist" | Run `supabase/schema.sql` in the SQL Editor |
 | "Both Gemini and Groq failed" | Check the keys. Check the Vercel function logs for `[ai]` lines. A 404 means the model was retired: change `GEMINI_MODEL` / `GROQ_MODEL` |
 | Timeline often says "via groq" | Gemini's free tier is rate-limiting (429). That's expected under bursts; the fallback is doing its job |
-| Load samples is slow (30 s+) | Normal: 7 real AI calls run in parallel. The routes allow up to 60 s |
+| Load samples is slow (30–60 s) | Normal: 7 real AI calls, run 2 at a time so Groq's free per-minute limit isn't hit. The seed route allows up to 120 s |

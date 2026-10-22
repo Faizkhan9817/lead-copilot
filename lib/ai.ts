@@ -8,7 +8,8 @@ type Options = { json?: boolean; stream?: boolean };
 // An error whose message is safe and useful to show the salesperson.
 export class AIError extends Error {}
 
-const TIMEOUT_MS = 25_000; // whole request for normal calls
+const TIMEOUT_MS = 15_000; // whole request for normal calls; a hung Gemini call falls back to Groq sooner
+const MAX_RETRY_WAIT_S = 20; // longest we'll wait when Groq says "rate limited, retry after N seconds"
 const STREAM_TIMEOUT_MS = 60_000; // streams stay open while text arrives
 
 // ---------- Providers (plain fetch, no SDKs) ----------
@@ -46,18 +47,29 @@ async function groqRequest(messages: Msg[], { json, stream }: Options): Promise<
   const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
   // Groq uses the OpenAI chat format, so messages go through unchanged.
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.4,
-      stream: !!stream,
-      ...(json && { response_format: { type: "json_object" } }),
-    }),
-    signal: AbortSignal.timeout(stream ? STREAM_TIMEOUT_MS : TIMEOUT_MS),
-  });
+  const send = () =>
+    fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.4,
+        stream: !!stream,
+        ...(json && { response_format: { type: "json_object" } }),
+      }),
+      signal: AbortSignal.timeout(stream ? STREAM_TIMEOUT_MS : TIMEOUT_MS),
+    });
+
+  let res = await send();
+  // Groq is the last resort, so on a per-minute rate limit (free tier: 8,000 tokens/min) wait the time
+  // it asks for and try once more, instead of failing straight away.
+  const wait = Number(res.headers.get("retry-after"));
+  if (res.status === 429 && wait > 0 && wait <= MAX_RETRY_WAIT_S) {
+    console.warn(`[ai] Groq rate-limited, retrying in ${wait}s`);
+    await new Promise((r) => setTimeout(r, wait * 1000));
+    res = await send();
+  }
   if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res;
 }

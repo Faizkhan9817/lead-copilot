@@ -9,7 +9,7 @@
 
 ## Try it in 60 seconds
 
-1. Open the live URL. No login is needed. If the list is empty, click **Load samples** (≈30 s, runs the real AI on 6 Indian leads).
+1. Open the live URL. No login is needed. If the list is empty, click **Load samples** (about 30–60 s, runs the real AI on 6 Indian leads).
 2. **Follow-ups due** is at the top: **Arjun Mehta** has an overdue follow-up. The purple banner shows what was promised. Open the **Call** tab to see the commitments and a ready-to-send follow-up message.
 3. Click **Priya Raghavan** (hot). On the **Analysis** tab, *Why score …* explains the score in 3 bullets.
 4. **Call** tab → **Generate call prep**: 3 talking points, 2 questions, objections with rebuttals.
@@ -99,7 +99,7 @@ flowchart LR
 
 - **Primary:** Google Gemini (`GEMINI_MODEL`, default `gemini-3.8-flash`). **Fallback:** Groq (`GROQ_MODEL`, default `openai/gpt-oss-120b`).
 - **Calls use plain `fetch`, no SDKs.** That's about 160 lines in `lib/ai.ts`.
-- **On any Gemini failure** (bad key, 429 rate limit, 5xx, 25 s timeout), the same messages go to Groq. If both fail, the user sees *"The AI service is unavailable right now… try again in a minute"*.
+- **On any Gemini failure** (bad key, 429 rate limit, 5xx, 15 s timeout), the same messages go to Groq. If Groq itself is rate-limited, it waits the `retry-after` time it's given (up to 20 s) and retries once. If both fail, the user sees *"The AI service is unavailable right now… try again in a minute"*.
 - **The timeline records which provider answered.**
 
 **Structured output.** Analysis, call prep and call notes all ask for JSON. Each provider's JSON mode is switched on, and **Zod** validates the exact shape: types, 0–100 range, enums, and array lengths (exactly 3 talking points, for example). If validation fails, the model gets its own output plus the specific errors and is asked once to correct it. A second failure shows a friendly error, so retries never loop.
@@ -123,7 +123,7 @@ flowchart LR
 npm install
 cp .env.example .env.local      # then fill in the 4 keys, see docs/DEPLOY.md
 npm run dev                     # http://localhost:3000, then click "Load samples"
-npm run test:ai                 # 10 offline tests: fallback, retry, streaming (no keys needed)
+npm run test:ai                 # 11 offline tests: fallback, retry, streaming (no keys needed)
 ```
 
 Create the tables once by pasting `supabase/schema.sql` into the Supabase SQL Editor. Full setup and deployment: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
@@ -132,7 +132,7 @@ Create the tables once by pasting `supabase/schema.sql` into the Supabase SQL Ed
 
 ## Testing
 
-- **Offline (`npm run test:ai`):** 10 tests that fake `fetch`. They cover Gemini OK; Gemini 429 → Groq; Gemini key missing → Groq; both fail → friendly error; JSON inside Markdown code fences; malformed JSON → one retry; wrong shape twice → error; Gemini streaming; Groq streaming fallback; an SSE event split across two network reads.
+- **Offline (`npm run test:ai`):** 11 tests that fake `fetch`. They cover Gemini OK; Gemini 429 → Groq; Gemini key missing → Groq; Groq 429 → wait and retry; both fail → friendly error; JSON inside Markdown code fences; malformed JSON → one retry; wrong shape twice → error; Gemini streaming; Groq streaming fallback; an SSE event split across two network reads.
 - **Live, with the real models:** samples (6/6 analyzed in 30 s); empty, 10k-character, Hindi and two injection messages; chat (grounded, refuses other leads or off-topic questions); call prep; call notes ("revert by Friday" → the correct Friday date); a bad Gemini key → Groq in under 1 s; both keys bad → friendly error; a real Gemini free-tier 429 → Groq took over.
 - **What live testing changed:** both of my original default models had been retired, so I switched via env vars. The model also asserted facts it couldn't know ("parking included"), so I made the grounding rule explicit. Details in [docs/DECISIONS.md](docs/DECISIONS.md) #20.
 
