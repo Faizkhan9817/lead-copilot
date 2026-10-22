@@ -134,12 +134,11 @@ Create the tables once by pasting `supabase/schema.sql` into the Supabase SQL Ed
 
 - **Offline (`npm run test:ai`):** 11 tests that fake `fetch`. They cover Gemini OK; Gemini 429 → Groq; Gemini key missing → Groq; Groq 429 → wait and retry; both fail → friendly error; JSON inside Markdown code fences; malformed JSON → one retry; wrong shape twice → error; Gemini streaming; Groq streaming fallback; an SSE event split across two network reads.
 - **Live, with the real models:** samples (6/6 analyzed in 30 s); empty, 10k-character, Hindi and two injection messages; chat (grounded, refuses other leads or off-topic questions); call prep; call notes ("revert by Friday" → the correct Friday date); a bad Gemini key → Groq in under 1 s; both keys bad → friendly error; a real Gemini free-tier 429 → Groq took over.
-- **What live testing changed:** both of my original default models had been retired, so I switched via env vars. The model also asserted facts it couldn't know ("parking included"), so I made the grounding rule explicit. Details in [docs/DECISIONS.md](docs/DECISIONS.md) #20.
+- **What live testing changed:** both of my original default models had been retired, so I switched via env vars. The model also asserted facts it couldn't know ("parking included"), so I made the grounding rule explicit. And when Gemini's daily quota ran out, "Load samples" sent every request to Groq at once and hit its 8,000 tokens-per-minute limit, so samples now run 2 at a time, Groq rate limits are retried once, and Groq uses low reasoning effort.
 
 ---
 
 ## Key technical decisions
-Full reasoning, alternatives and likely interview questions are in **[docs/DECISIONS.md](docs/DECISIONS.md)**. The short version:
 
 1. **A real database (Supabase), not memory.** Vercel's serverless instances are thrown away, so in-memory data would disappear.
 2. **Gemini → Groq fallback with plain `fetch`.** It's small and explainable, and the model names are env vars, which mattered once both defaults were retired.
@@ -179,7 +178,7 @@ lib/schemas.ts               Zod schemas + shared types + isFollowUpDue
 lib/seed-data.ts             6 sample leads (+ call notes for the overdue one)
 supabase/schema.sql          tables, indexes, RLS
 scripts/test-ai.ts           offline tests
-docs/                        DECISIONS · DEPLOY · DEMO_SCRIPT · CHEATSHEET
+docs/DEPLOY.md               setup and deployment guide
 ```
 
 ## AI usage disclosure
@@ -196,6 +195,4 @@ I used two AI tools, and I want to be clear about who did what.
 - **Set up the accounts and keys** (Gemini, Groq, Supabase), created the database, and deployed the app on Vercel.
 - **Caught a hydration error** in the browser and had it fixed.
 
-**What Claude Code did:** wrote the code, prompts, tests and documentation, ran the offline and live tests, and created the GitHub repo at my request. Live testing surfaced four issues: retired default models, the model asserting facts it couldn't know, Gemini's daily free-tier quota, and Groq's per-minute token limit. The fixes are recorded in `docs/DECISIONS.md`.
-
-I'm using `docs/DECISIONS.md` and `docs/CHEATSHEET.md` to make sure I can explain every file and decision in the interview.
+**What Claude Code did:** wrote the code, prompts, tests and documentation, ran the offline and live tests, and created the GitHub repo at my request. Live testing surfaced four issues: retired default models, the model asserting facts it couldn't know, Gemini's daily free-tier quota, and Groq's per-minute token limit. Each was fixed and is described under Testing above.

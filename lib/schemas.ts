@@ -70,7 +70,7 @@ export type Lead = LeadInput & {
 // Local date as YYYY-MM-DD (en-CA happens to format dates that way).
 export const todayISO = () => new Date().toLocaleDateString("en-CA");
 
-// Computed on read, never stored, so it can't go stale (see DECISIONS.md #3).
+// Computed on read, never stored, so it can't go stale and needs no scheduled job to update it.
 export function isFollowUpDue(lead: Lead): boolean {
   return lead.follow_up_status === "pending" && !!lead.follow_up_date && lead.follow_up_date <= todayISO();
 }
